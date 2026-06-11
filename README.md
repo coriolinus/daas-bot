@@ -1,6 +1,6 @@
-# DAAS Bot
+# Discord As A Spreadsheet Bot
 
-## Discord As A Spreadsheet Bot
+![DAAS Bot](./resources/daas-bot.png)
 
 This bot achieves a very particular use case: parsing the entire message set of a single channel, then exporting a sqlite database containing the dataset, and uploading that database to the channel.
 
@@ -61,9 +61,3 @@ The export command performs these steps:
 - Posts a message. This message's format is unstable and unspecified, but it will contain at minimum the timestamp of work start, timestamp of work stop, duration of execution, and an attachment with the produced sqlite database.
 
 Note that at no point is any database reused. This allows for schema migrations over time and for external software to track changes in votes over time by comparing different exports.
-
-## Not This
-
-![Das Boot](./resources/das-boot.jpeg)
-
-That is a famous movie.
