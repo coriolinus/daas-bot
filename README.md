@@ -33,7 +33,34 @@ The output is a sqlite database containing the following tables:
 - `categories (id, emoji)`
 - `votes (id, item_id, user_id, category_id)`
 
-Nothing is nullable. Ids are numeric. Everything else is text.
+Nothing is nullable. Ids are numeric. Everything else is text. (Timestamps are [encoded in ISO-8601](https://sqlite.org/lang_datefunc.html#tmval).)
+
+## Triggers
+
+When first adding this bot to your server, this bot listens globally for two triggers:
+
+- `/daas enable`: registers the current channel as one on which to potentially handle export events
+- `/daas disable`: unregisters the current channel as one on which to potentially handle export events
+
+These preceding triggers are only callable by admins.
+
+Once `/daas enable` has been called in at least one channel, any user can then call the export trigger in the enabled channel:
+
+- `/daas export`
+
+### Exporting
+
+The export command performs these steps:
+
+- Constructs a new empty Sqlite database and sets up its schema
+- Reads all messages in the channel back to the channel start
+- For each [matching message](#parsed-message-format):
+  - Writes to the `items`, `tags`, `tag_associations`, and `users` tables
+  - Gets all reactions
+  - Writes to the `users`, `categories` and `votes` tables
+- Posts a message. This message's format is unstable and unspecified, but it will contain at minimum the timestamp of work start, timestamp of work stop, duration of execution, and an attachment with the produced sqlite database.
+
+Note that at no point is any database reused. This allows for schema migrations over time and for external software to track changes in votes over time by comparing different exports.
 
 ## Not This
 
