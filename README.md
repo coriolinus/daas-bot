@@ -61,3 +61,11 @@ The export command performs these steps:
 - Posts a message. This message's format is unstable and unspecified, but it will contain at minimum the timestamp of work start, timestamp of work stop, duration of execution, and an attachment with the produced sqlite database.
 
 Note that at no point is any database reused. This allows for schema migrations over time and for external software to track changes in votes over time by comparing different exports.
+
+## Local Debug Config
+
+1. `source .env`: Populates the environment variables with common options and secrets.
+1. `cargo run`: Starts the server.
+1. (console 2) `npx localtunnel --port 8080`: Opens a transient tunnel from a random ID to your local server
+1. (browser) adjust [bot settings](https://discord.com/developers/applications/1514586560169771129/information) to update interactions endpoint url
+1. Test in Discord on any enabled server by running `/daas help` or any other `/daas` command
