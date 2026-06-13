@@ -73,4 +73,8 @@ pub struct Args {
         requires = "autoregister"
     )]
     pub guild: Option<GuildId>,
+
+    /// The port on which the server should listen.
+    #[arg(short, long, default_value_t = 8080)]
+    pub port: u16,
 }
