@@ -1,7 +1,7 @@
-use crate::server::FallibleResponse;
+use crate::server::{Pong, Result};
 use serenity::all::PingInteraction;
 
-/// Implement the ping command
-pub async fn ping(interation: PingInteraction) -> FallibleResponse {
-    todo!()
+/// Immediately respond to a ping with a pong
+pub async fn ping(_interation: PingInteraction) -> Result<Pong> {
+    Ok(Pong)
 }

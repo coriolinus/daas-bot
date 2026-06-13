@@ -1,7 +1,7 @@
-use crate::server::FallibleResponse;
+use crate::server::{Message, Result};
 use serenity::all::CommandInteraction;
 
-/// Implement the help command
-pub async fn help(interation: CommandInteraction) -> FallibleResponse {
+/// Immediately return a help message giving an overview of what the commands are and what each does.
+pub async fn help(_interation: CommandInteraction) -> Result<Message> {
     todo!()
 }
