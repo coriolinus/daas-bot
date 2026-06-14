@@ -1,6 +1,6 @@
 mod error;
 mod handlers;
-mod into_interaction_response;
+mod into_response;
 mod validate;
 
 use std::sync::Arc;
@@ -9,10 +9,10 @@ use actix_web::{App, HttpResponse, HttpServer, post, web};
 use anyhow::Context as _;
 use serenity::all::{Http, Interaction, Verifier};
 
-pub use self::into_interaction_response::{Defer, Message, Pong};
+pub use self::into_response::{Defer, Message, Pong};
 use self::{
     error::{Error, Result},
-    into_interaction_response::IntoInteractionResponse,
+    into_response::IntoResponse,
     validate::{XSignatureEd25519, XSignatureTimestamp},
 };
 use crate::cli::Args;
@@ -52,14 +52,6 @@ async fn handle_interaction(
     timestamp: web::Header<XSignatureTimestamp>,
     body: web::Bytes,
 ) -> Result<HttpResponse> {
-    /// takes something which can become an interaction response and wraps it up appropriately
-    fn into_http_response<Resp>(maybe_response: Result<Resp>) -> Result<HttpResponse>
-    where
-        Resp: IntoInteractionResponse,
-    {
-        maybe_response.map(|response| HttpResponse::Ok().json(response.into_interaction_response()))
-    }
-
     data.verifier
         .verify(&signature, &timestamp, &body)
         .map_err(|_| Error::Validation)?;
@@ -68,7 +60,9 @@ async fn handle_interaction(
         serde_json::from_slice::<Interaction>(&body).map_err(|_| Error::MalformedInput)?;
 
     match interaction {
-        Interaction::Ping(interaction) => into_http_response(handlers::ping(interaction).await),
+        Interaction::Ping(interaction) => handlers::ping(interaction)
+            .await
+            .map(IntoResponse::into_http),
         Interaction::Command(interaction) => {
             match interaction
                 .data
@@ -76,11 +70,21 @@ async fn handle_interaction(
                 .first()
                 .map(|option| option.name.as_ref())
             {
-                Some("cleanup") => into_http_response(handlers::cleanup(interaction).await),
-                Some("disable") => into_http_response(handlers::disable(interaction).await),
-                Some("enable") => into_http_response(handlers::enable(interaction).await),
-                Some("export") => into_http_response(handlers::export(interaction).await),
-                Some("help") => into_http_response(handlers::help(interaction).await),
+                Some("cleanup") => handlers::cleanup(interaction)
+                    .await
+                    .map(IntoResponse::into_http),
+                Some("disable") => handlers::disable(interaction)
+                    .await
+                    .map(IntoResponse::into_http),
+                Some("enable") => handlers::enable(interaction)
+                    .await
+                    .map(IntoResponse::into_http),
+                Some("export") => handlers::export(interaction)
+                    .await
+                    .map(IntoResponse::into_http),
+                Some("help") => handlers::help(interaction)
+                    .await
+                    .map(IntoResponse::into_http),
                 _ => Err(Error::UnknownCommand),
             }
         }
