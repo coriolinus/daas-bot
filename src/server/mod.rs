@@ -53,10 +53,11 @@ async fn handle_interaction(
     body: web::Bytes,
 ) -> Result<HttpResponse> {
     /// takes something which can become an interaction response and wraps it up appropriately
-    fn into_http_response<T: IntoInteractionResponse>(response: Result<T>) -> Result<HttpResponse> {
-        response.map(|into_interaction| {
-            HttpResponse::Ok().json(into_interaction.into_interaction_response())
-        })
+    fn into_http_response<Resp>(maybe_response: Result<Resp>) -> Result<HttpResponse>
+    where
+        Resp: IntoInteractionResponse,
+    {
+        maybe_response.map(|response| HttpResponse::Ok().json(response.into_interaction_response()))
     }
 
     data.verifier
