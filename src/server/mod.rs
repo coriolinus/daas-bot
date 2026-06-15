@@ -20,7 +20,6 @@ use crate::cli::Args;
 #[derive(derive_more::Debug, Clone)]
 struct AppState {
     config: Arc<Args>,
-    #[expect(unused)]
     http: Arc<Http>,
     #[debug("<Verifier instance>")]
     verifier: Verifier,
@@ -47,17 +46,18 @@ impl AppState {
 
 #[post("/")]
 async fn handle_interaction(
-    data: web::Data<AppState>,
+    app_state: web::Data<AppState>,
     signature: web::Header<XSignatureEd25519>,
     timestamp: web::Header<XSignatureTimestamp>,
     body: web::Bytes,
 ) -> Result<HttpResponse> {
-    data.verifier
+    app_state
+        .verifier
         .verify(&signature, &timestamp, &body)
         .map_err(|_| Error::Validation)?;
 
-    let interaction =
-        serde_json::from_slice::<Interaction>(&body).map_err(|_| Error::MalformedInput)?;
+    let interaction = serde_json::from_slice::<Interaction>(&body)
+        .map_err(|_| Error::MalformedInput("failed to deserialize interaction"))?;
 
     match interaction {
         Interaction::Ping(interaction) => handlers::ping(interaction)
@@ -76,7 +76,7 @@ async fn handle_interaction(
                 Some("disable") => handlers::disable(interaction)
                     .await
                     .map(IntoResponse::into_http),
-                Some("enable") => handlers::enable(interaction)
+                Some("enable") => handlers::enable(interaction, app_state.http.clone())
                     .await
                     .map(IntoResponse::into_http),
                 Some("export") => handlers::export(interaction)
