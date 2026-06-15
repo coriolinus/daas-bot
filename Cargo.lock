@@ -582,6 +582,7 @@ dependencies = [
  "serde_json",
  "serenity",
  "thiserror 2.0.18",
+ "tokio",
 ]
 
 [[package]]
