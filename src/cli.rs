@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use serenity::all::{ApplicationId, GuildId};
 
 /// DAAS-Bot lets you use Discord As A Spreadsheet.
@@ -77,4 +79,13 @@ pub struct Args {
     /// The port on which the server should listen.
     #[arg(short, long, default_value_t = 8080)]
     pub port: u16,
+
+    /// Path to the database file.
+    ///
+    /// This is the local database, which mainly keeps track of which channels
+    /// have been enabled.
+    ///
+    /// Required unless using `--register`.
+    #[arg(long, env, required = false, required_unless_present = "register")]
+    pub database_path: PathBuf,
 }
