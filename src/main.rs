@@ -1,6 +1,7 @@
 mod cli;
 mod register;
 mod server;
+mod sql;
 
 use anyhow::Result;
 use clap::Parser as _;

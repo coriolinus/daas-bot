@@ -31,7 +31,7 @@ The output is a sqlite database containing the following tables:
 - `tag_associations (item_id, tag_id)`
 - `users (id, display_name)`
 - `categories (id, emoji)`
-- `votes (id, item_id, user_id, category_id)`
+- `votes (item_id, user_id, category_id)`
 
 Nothing is nullable. Ids are numeric. Everything else is text. (Timestamps are [encoded in ISO-8601](https://sqlite.org/lang_datefunc.html#tmval).)
 
