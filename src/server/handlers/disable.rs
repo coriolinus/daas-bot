@@ -14,9 +14,7 @@ pub async fn disable(interaction: CommandInteraction, app_state: &AppState) -> R
         // member has insufficient permissions to do this
         return Ok(CreateInteractionResponseMessage::new()
             .ephemeral(true)
-            .content(
-                "error: you must have the `MANAGE_GUILD` permission to enable DAAS in this channel",
-            )
+            .content("permission denied")
             .into());
     }
 
