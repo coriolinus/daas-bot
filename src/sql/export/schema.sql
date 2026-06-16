@@ -3,6 +3,7 @@ PRAGMA foreign_keys = ON;
 -- Items
 CREATE TABLE items (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    posted_by   INTEGER NOT NULL REFERENCES users(id),
     title       TEXT    NOT NULL,
     description TEXT    NOT NULL,
     created     TEXT    NOT NULL, -- time of discord message creation
