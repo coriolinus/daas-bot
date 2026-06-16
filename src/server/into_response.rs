@@ -1,4 +1,5 @@
 use actix_web::HttpResponse;
+use either::Either;
 use serenity::all::{CreateInteractionResponse, CreateInteractionResponseMessage};
 
 pub trait IntoResponse: Sized {
@@ -31,5 +32,14 @@ pub struct Defer(CreateInteractionResponseMessage);
 impl IntoResponse for Defer {
     fn into_interaction(self) -> CreateInteractionResponse {
         CreateInteractionResponse::Defer(self.into())
+    }
+}
+
+impl IntoResponse for Either<Message, Defer> {
+    fn into_interaction(self) -> CreateInteractionResponse {
+        match self {
+            Either::Left(message) => message.into_interaction(),
+            Either::Right(defer) => defer.into_interaction(),
+        }
     }
 }
