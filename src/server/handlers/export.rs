@@ -1,5 +1,5 @@
 use either::Either;
-use serenity::all::CommandInteraction;
+use serenity::all::{CommandInteraction, CreateInteractionResponseMessage};
 
 use crate::{
     server::{AppState, Defer, Error, Message, Result},
@@ -24,7 +24,11 @@ pub async fn export(
     let connection = app_state.local_db.lock().await;
 
     if !channel_is_enabled(&connection, guild, interaction.channel_id).await? {
-        todo!("return a message that the channel has not been enabled");
+        return Ok(Either::Left(Message::from(
+            CreateInteractionResponseMessage::new()
+                .ephemeral(true)
+                .content("permission denied"),
+        )));
     }
 
     todo!(
