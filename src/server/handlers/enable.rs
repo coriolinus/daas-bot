@@ -1,4 +1,4 @@
-use serenity::all::CommandInteraction;
+use serenity::all::{CommandInteraction, CreateInteractionResponseMessage};
 
 use super::may_manage_guild;
 use crate::{
@@ -14,7 +14,12 @@ use crate::{
 pub async fn enable(interaction: CommandInteraction, app_state: &AppState) -> Result<Message> {
     if !may_manage_guild(&interaction)? {
         // member has insufficient permissions to do this
-        todo!("return an 'insufficient permissions' response")
+        return Ok(CreateInteractionResponseMessage::new()
+            .ephemeral(true)
+            .content(
+                "error: you must have the `MANAGE_GUILD` permission to enable DAAS in this channel",
+            )
+            .into());
     }
 
     let guild = interaction
@@ -23,7 +28,7 @@ pub async fn enable(interaction: CommandInteraction, app_state: &AppState) -> Re
 
     let connection = app_state.local_db.lock().await;
 
-    let enabled = enable_channel(
+    let already_enabled = enable_channel(
         &connection,
         guild,
         interaction.channel_id,
@@ -31,5 +36,13 @@ pub async fn enable(interaction: CommandInteraction, app_state: &AppState) -> Re
     )
     .await?;
 
-    todo!("emit success message")
+    let msg = if already_enabled {
+        "DAAS was already enabled for this channel"
+    } else {
+        "DAAS enabled for this channel. Run `/daas export` to perform an export."
+    };
+    Ok(CreateInteractionResponseMessage::new()
+        .ephemeral(already_enabled)
+        .content(msg)
+        .into())
 }
