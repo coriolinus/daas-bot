@@ -21,8 +21,8 @@ pub enum Error {
     UnsupportedInteractionType,
     #[error("unknown command")]
     UnknownCommand,
-    #[error("interacting with discord http api")]
-    Http(#[source] serenity::Error),
+    #[error("interacting with the local database")]
+    LocalDb(#[from] crate::sql::Error),
 }
 
 impl ResponseError for Error {
@@ -32,7 +32,7 @@ impl ResponseError for Error {
             Error::MalformedInput(_)
             | Error::UnsupportedInteractionType
             | Error::UnknownCommand => StatusCode::BAD_REQUEST,
-            Error::Http(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            Error::LocalDb(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 

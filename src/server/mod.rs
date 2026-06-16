@@ -7,7 +7,9 @@ use std::sync::Arc;
 
 use actix_web::{App, HttpResponse, HttpServer, post, web};
 use anyhow::Context as _;
+use rusqlite::Connection;
 use serenity::all::{Http, Interaction, Verifier};
+use tokio::sync::Mutex;
 
 pub use self::into_response::{Defer, Message, Pong};
 use self::{
@@ -23,6 +25,7 @@ struct AppState {
     http: Arc<Http>,
     #[debug("<Verifier instance>")]
     verifier: Verifier,
+    local_db: Arc<Mutex<Connection>>,
 }
 
 impl AppState {
@@ -36,10 +39,18 @@ impl AppState {
         let verifier =
             Verifier::try_new(public_key).context("cryptographically parsing public key")?;
 
+        let local_db = Arc::new(Mutex::new(
+            Connection::open(&config.database_path).context(format!(
+                "opening local database at {}",
+                config.database_path.display()
+            ))?,
+        ));
+
         Ok(Self {
             config,
             http,
             verifier,
+            local_db,
         })
     }
 }
@@ -70,16 +81,16 @@ async fn handle_interaction(
                 .first()
                 .map(|option| option.name.as_ref())
             {
-                Some("cleanup") => handlers::cleanup(interaction)
+                Some("cleanup") => handlers::cleanup(interaction, &app_state)
                     .await
                     .map(IntoResponse::into_http),
-                Some("disable") => handlers::disable(interaction)
+                Some("disable") => handlers::disable(interaction, &app_state)
                     .await
                     .map(IntoResponse::into_http),
-                Some("enable") => handlers::enable(interaction, app_state.http.clone())
+                Some("enable") => handlers::enable(interaction, &app_state)
                     .await
                     .map(IntoResponse::into_http),
-                Some("export") => handlers::export(interaction)
+                Some("export") => handlers::export(interaction, &app_state)
                     .await
                     .map(IntoResponse::into_http),
                 Some("help") => handlers::help(interaction)
