@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use log::LevelFilter;
 use serenity::all::{ApplicationId, GuildId};
 
 /// DAAS-Bot lets you use Discord As A Spreadsheet.
@@ -88,4 +89,10 @@ pub struct Args {
     /// Required unless using `--register`.
     #[arg(long, env, required = false, required_unless_present = "register")]
     pub database_path: PathBuf,
+
+    /// Log level
+    ///
+    /// Logs below this level are filtered out.
+    #[arg(short, long, default_value_t = LevelFilter::Info)]
+    pub log_level: LevelFilter,
 }

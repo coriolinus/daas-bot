@@ -4,16 +4,28 @@ mod register;
 mod server;
 mod sql;
 
-use anyhow::Result;
+use anyhow::{Context as _, Result};
 use clap::Parser as _;
+use log::{LevelFilter, debug};
+use serenity::all::Http;
 
 use cli::Args;
 use register::register;
-use serenity::all::Http;
+use simplelog::TermLogger;
 
 #[actix_web::main]
 async fn main() -> Result<()> {
     let args = Args::parse();
+
+    if args.log_level != LevelFilter::Off {
+        TermLogger::init(
+            args.log_level,
+            Default::default(),
+            Default::default(),
+            Default::default(),
+        )
+        .context("initializing default logger")?;
+    }
 
     let http = Http::new(&args.bot_token);
     http.set_application_id(args.application_id);
@@ -27,5 +39,6 @@ async fn main() -> Result<()> {
         }
     }
 
+    debug!("parsed initial arguments; running the server");
     server::run(args, http).await
 }

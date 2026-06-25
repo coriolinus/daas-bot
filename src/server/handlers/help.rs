@@ -1,5 +1,7 @@
-use crate::server::{Message, Result};
+use log::info;
 use serenity::all::{CommandInteraction, CreateInteractionResponseMessage};
+
+use crate::server::{Message, Result};
 
 const HELP_MESSAGE: &str = "# **Discord As A Spreadsheet Bot** Help
 
@@ -41,6 +43,7 @@ Nothing is nullable. Ids are numeric. Everything else is text. (Timestamps are [
 
 /// Immediately return a help message giving an overview of what the commands are and what each does.
 pub async fn help(_interation: CommandInteraction) -> Result<Message> {
+    info!("handling help interaction");
     Ok(CreateInteractionResponseMessage::new()
         .ephemeral(true)
         .content(HELP_MESSAGE)

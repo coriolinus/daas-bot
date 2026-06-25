@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 use actix_web::{App, HttpResponse, HttpServer, post, web};
 use anyhow::Context as _;
+use log::{info, warn};
 use rusqlite::Connection;
 use serenity::all::{Http, Interaction, Verifier};
 use tokio::sync::Mutex;
@@ -62,13 +63,16 @@ async fn handle_interaction(
     timestamp: web::Header<XSignatureTimestamp>,
     body: web::Bytes,
 ) -> Result<HttpResponse> {
+    info!("handling request to /");
     app_state
         .verifier
         .verify(&signature, &timestamp, &body)
-        .map_err(|_| Error::Validation)?;
+        .map_err(|_| Error::Validation)
+        .inspect_err(|_| warn!("verifier failed to verify incoming request"))?;
 
     let interaction = serde_json::from_slice::<Interaction>(&body)
-        .map_err(|_| Error::MalformedInput("failed to deserialize interaction"))?;
+        .map_err(|_| Error::MalformedInput("failed to deserialize interaction"))
+        .inspect_err(|_| warn!("failed to deserialize interaction"))?;
 
     match interaction {
         Interaction::Ping(interaction) => handlers::ping(interaction)
@@ -101,6 +105,7 @@ async fn handle_interaction(
         }
         _ => Err(Error::UnsupportedInteractionType),
     }
+    .inspect_err(|err| warn!("interaction handler returned error: {err}"))
 }
 
 /// Run the actix server

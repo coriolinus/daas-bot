@@ -2,6 +2,7 @@ use std::{fmt::Write as _, sync::Arc, thread};
 
 use either::Either;
 use jiff::Timestamp;
+use log::{error, info, warn};
 use serenity::all::{
     CommandInteraction, CreateAttachment, CreateInteractionResponseFollowup,
     CreateInteractionResponseMessage, Http,
@@ -25,6 +26,7 @@ pub async fn export(
     interaction: CommandInteraction,
     app_state: &AppState,
 ) -> Result<Either<Message, Defer>> {
+    info!("handling export interaction");
     let guild = interaction
         .guild_id
         .ok_or(Error::MalformedInput("no guild id"))?;
@@ -60,6 +62,8 @@ pub async fn export(
 }
 
 async fn gather_export_and_update_response(interaction: CommandInteraction, http: Arc<Http>) {
+    info!("starting export task");
+
     let token = interaction.token.clone();
     let channel_name = interaction
         .channel
@@ -78,6 +82,7 @@ async fn gather_export_and_update_response(interaction: CommandInteraction, http
         let duration = Timestamp::now() - now;
 
         let content = format!("Exported {channel_name} at {now} in {duration}");
+        info!("successfully completed export job");
 
         Ok((
             CreateInteractionResponseFollowup::new().content(content),
@@ -87,6 +92,8 @@ async fn gather_export_and_update_response(interaction: CommandInteraction, http
     .await
     .unwrap_or_else(|err: Error| {
         let mut content = "daas-bot encountered a problem while performing export:\n\n".to_owned();
+
+        warn!("failed to complete export job due to {err}");
 
         let mut err: Option<&dyn std::error::Error> = Some(&err);
         while let Some(top_level) = err {

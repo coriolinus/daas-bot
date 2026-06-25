@@ -1,8 +1,10 @@
+use log::info;
+use serenity::all::{CommandInteraction, CreateInteractionResponseMessage};
+
 use crate::{
     server::{AppState, Error, Message, Result, handlers::may_manage_guild},
     sql::disable_channel,
 };
-use serenity::all::{CommandInteraction, CreateInteractionResponseMessage};
 
 /// Disable the export command for a channel.
 ///
@@ -10,6 +12,7 @@ use serenity::all::{CommandInteraction, CreateInteractionResponseMessage};
 /// 2. Remove the `(guild, channel)` pair from the local DB
 /// 3. Respond with success message
 pub async fn disable(interaction: CommandInteraction, app_state: &AppState) -> Result<Message> {
+    info!("handling disable interaction");
     if !may_manage_guild(&interaction)? {
         // member has insufficient permissions to do this
         return Ok(CreateInteractionResponseMessage::new()
