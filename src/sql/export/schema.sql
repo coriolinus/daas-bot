@@ -37,6 +37,8 @@ CREATE TABLE categories (
     emoji   TEXT    NOT NULL,
 );
 
+CREATE UNIQUE INDEX ON categories (emoji);
+
 -- Votes
 CREATE TABLE votes (
     item_id     INTEGER NOT NULL REFERENCES items(id),
