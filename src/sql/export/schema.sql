@@ -44,6 +44,5 @@ CREATE TABLE votes (
     item_id     INTEGER NOT NULL REFERENCES items(id),
     user_id     INTEGER NOT NULL REFERENCES users(id),
     category_id INTEGER NOT NULL REFERENCES categories(id),
-    created     TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
     PRIMARY KEY (item_id, user_id, category_id)
 );

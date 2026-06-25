@@ -2,7 +2,10 @@ use rusqlite::{Connection, named_params};
 use serenity::all::UserId;
 use tokio::task::block_in_place;
 
-use crate::{export::ItemWithMetadata, sql::ToSqlInteger as _};
+use crate::{
+    export::{ItemWithMetadata, Vote},
+    sql::ToSqlInteger as _,
+};
 
 use super::Result;
 
@@ -133,4 +136,51 @@ pub async fn add_item(connection: &mut Connection, item: &ItemWithMetadata) -> R
 
     transaction.commit()?;
     Ok(item_id)
+}
+
+/// Ensure a category exists in the export database.
+///
+/// Returns the category's primary key.
+async fn ensure_category(connection: &Connection, category: &str) -> Result<Pk> {
+    block_in_place(|| {
+        let query = "INSERT INTO categories (emoji)
+            VALUES (:category)
+            ON CONFLICT DO NOTHING
+            RETURNING id";
+
+        let mut stmt = connection.prepare_cached(query)?;
+        let id = stmt.query_one(
+            named_params! {
+                ":category": category,
+            },
+            |row| row.get(0),
+        )?;
+
+        Ok(id)
+    })
+}
+
+/// Add a vote to the export database.
+///
+/// This will error unless the appropriate user and items have already been added to the database.
+/// Ensure those already exist before calling this!
+pub async fn add_vote(connection: &mut Connection, vote: &Vote) -> Result<()> {
+    // gives us rollback on error
+    let transaction = connection.transaction()?;
+
+    let category_id = ensure_category(&transaction, &vote.emoji).await?;
+
+    block_in_place(|| {
+        let query = "INSERT INTO votes (item_id, user_id, category_id)
+            VALUES (:item_id, :user_id, :category_id)";
+
+        let mut stmt = transaction.prepare_cached(query)?;
+        stmt.execute(named_params! {
+            ":item_id": vote.item_id.to_sql(),
+            ":user_id": vote.user_id.to_sql(),
+            ":category_id": category_id,
+        })?;
+
+        Ok(())
+    })
 }
