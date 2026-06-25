@@ -16,6 +16,8 @@ CREATE TABLE tags (
     description TEXT    NOT NULL,
 );
 
+CREATE UNIQUE INDEX ON tags (description);
+
 -- Tag associations
 CREATE TABLE tag_associations (
     item_id     INTEGER NOT NULL REFERENCES items(id),
@@ -25,17 +27,9 @@ CREATE TABLE tag_associations (
 
 -- Users
 CREATE TABLE users (
-    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    id           INTEGER PRIMARY KEY,
     display_name TEXT    NOT NULL
 );
-
-CREATE TRIGGER users_updated
-AFTER UPDATE ON users
-FOR EACH ROW
-BEGIN
-    UPDATE users SET updated = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
-    WHERE id = OLD.id;
-END;
 
 -- Categories
 CREATE TABLE categories (
