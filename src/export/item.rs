@@ -71,10 +71,10 @@ pub(crate) struct ItemWithMetadata {
     pub(crate) modified_at: Option<Timestamp>,
 }
 
-impl TryFrom<Message> for ItemWithMetadata {
+impl TryFrom<&Message> for ItemWithMetadata {
     type Error = ParseError;
 
-    fn try_from(msg: Message) -> Result<Self, Self::Error> {
+    fn try_from(msg: &Message) -> Result<Self, Self::Error> {
         let item = msg.content.parse()?;
 
         let message_id = msg.id;
