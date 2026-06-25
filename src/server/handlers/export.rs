@@ -2,7 +2,7 @@ use std::{fmt::Write as _, sync::Arc, thread};
 
 use either::Either;
 use jiff::Timestamp;
-use log::{error, info, warn};
+use log::{debug, error, info, warn};
 use serenity::all::{
     CommandInteraction, CreateAttachment, CreateInteractionResponseFollowup,
     CreateInteractionResponseMessage, Http,
@@ -26,7 +26,7 @@ pub async fn export(
     interaction: CommandInteraction,
     app_state: &AppState,
 ) -> Result<Either<Message, Defer>> {
-    info!("handling export interaction");
+    debug!("handling export interaction");
     let guild = interaction
         .guild_id
         .ok_or(Error::MalformedInput("no guild id"))?;
@@ -62,7 +62,7 @@ pub async fn export(
 }
 
 async fn gather_export_and_update_response(interaction: CommandInteraction, http: Arc<Http>) {
-    info!("starting export task");
+    debug!("starting export task");
 
     let token = interaction.token.clone();
     let channel_name = interaction

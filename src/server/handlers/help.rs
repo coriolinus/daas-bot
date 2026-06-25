@@ -1,4 +1,4 @@
-use log::info;
+use log::debug;
 use serenity::all::{CommandInteraction, CreateInteractionResponseMessage};
 
 use crate::server::{Message, Result};
@@ -43,7 +43,7 @@ Nothing is nullable. Ids are numeric. Everything else is text. (Timestamps are [
 
 /// Immediately return a help message giving an overview of what the commands are and what each does.
 pub async fn help(_interation: CommandInteraction) -> Result<Message> {
-    info!("handling help interaction");
+    debug!("handling help interaction");
     Ok(CreateInteractionResponseMessage::new()
         .ephemeral(true)
         .content(HELP_MESSAGE)

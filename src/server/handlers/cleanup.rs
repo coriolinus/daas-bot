@@ -1,4 +1,4 @@
-use log::info;
+use log::debug;
 use serenity::all::CommandInteraction;
 
 use crate::server::{AppState, Defer, Result};
@@ -8,6 +8,6 @@ use crate::server::{AppState, Defer, Result};
 /// 1. Launch an async task to actually accomplish that.
 /// 2. While that's running, return this response.
 pub async fn cleanup(_interation: CommandInteraction, _app_state: &AppState) -> Result<Defer> {
-    info!("handling cleanup interaction");
+    debug!("handling cleanup interaction");
     todo!()
 }

@@ -1,4 +1,4 @@
-use log::info;
+use log::debug;
 use serenity::all::{CommandInteraction, CreateInteractionResponseMessage};
 
 use super::may_manage_guild;
@@ -13,7 +13,7 @@ use crate::{
 /// 2. Add the `(guild, channel)` pair to the local DB
 /// 3. Respond with success message
 pub async fn enable(interaction: CommandInteraction, app_state: &AppState) -> Result<Message> {
-    info!("handling enable interaction");
+    debug!("handling enable interaction");
     if !may_manage_guild(&interaction)? {
         // member has insufficient permissions to do this
         return Ok(CreateInteractionResponseMessage::new()

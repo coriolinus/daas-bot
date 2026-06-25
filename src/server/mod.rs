@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use actix_web::{App, HttpResponse, HttpServer, middleware::Logger, post, web};
 use anyhow::Context as _;
-use log::{info, warn};
+use log::{debug, warn};
 use rusqlite::Connection;
 use serenity::all::{Http, Interaction, Verifier};
 use tokio::sync::Mutex;
@@ -65,7 +65,7 @@ async fn handle_interaction(
     timestamp: Option<web::Header<XSignatureTimestamp>>,
     body: web::Bytes,
 ) -> Result<HttpResponse> {
-    info!("handling request to /");
+    debug!("handling request to /");
 
     // we specified the headers as optional in the extractors, because
     // in the event they are unset we still want to capture them and use our custom
