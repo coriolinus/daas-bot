@@ -1,6 +1,6 @@
 use rusqlite::{Connection, named_params};
 use serenity::all::{ChannelId, GuildId, UserId};
-use tokio::task::block_in_place;
+use tokio::{sync::OwnedMutexGuard, task::spawn_blocking};
 
 use crate::sql::ToSqlInteger as _;
 
@@ -12,12 +12,12 @@ refinery::embed_migrations!("src/sql/bot/migrations");
 ///
 /// Returns `true` if the channel was enabled, or `false` if it had already previously been enabled
 pub async fn enable_channel(
-    connection: &Connection,
+    connection: OwnedMutexGuard<Connection>,
     guild: GuildId,
     channel: ChannelId,
     actor: UserId,
 ) -> Result<bool> {
-    block_in_place(|| {
+    spawn_blocking(move || {
         // OR IGNORE means if the (guild_id, channel_id) pair already existed, silently do nothing.
         let query = "INSERT OR IGNORE
             INTO enabled_channels (guild_id, channel_id, enabled_by)
@@ -32,17 +32,20 @@ pub async fn enable_channel(
 
         Ok(rows != 0)
     })
+    .await
+    .map_err(Into::into)
+    .flatten()
 }
 
 /// disable a channel in the local database
 ///
 /// Returns `true` if the channel was disabled, or `false` if it had not been enabled in the first place
 pub async fn disable_channel(
-    connection: &Connection,
+    connection: OwnedMutexGuard<Connection>,
     guild: GuildId,
     channel: ChannelId,
 ) -> Result<bool> {
-    block_in_place(|| {
+    spawn_blocking(move || {
         let query = "DELETE FROM enabled_channels
             WHERE guild_id = :guild_id
             AND channel_id = :channel_id";
@@ -55,14 +58,17 @@ pub async fn disable_channel(
 
         Ok(rows != 0)
     })
+    .await
+    .map_err(Into::into)
+    .flatten()
 }
 
 pub async fn channel_is_enabled(
-    connection: &Connection,
+    connection: OwnedMutexGuard<Connection>,
     guild: GuildId,
     channel: ChannelId,
 ) -> Result<bool> {
-    block_in_place(|| {
+    spawn_blocking(move || {
         let query = "
         SELECT EXISTS (
             SELECT 1 FROM enabled_channels
@@ -80,4 +86,7 @@ pub async fn channel_is_enabled(
         )
         .map_err(Into::into)
     })
+    .await
+    .map_err(Into::into)
+    .flatten()
 }

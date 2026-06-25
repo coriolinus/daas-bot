@@ -25,9 +25,9 @@ pub async fn disable(interaction: CommandInteraction, app_state: &AppState) -> R
         .guild_id
         .ok_or(Error::MalformedInput("no guild id"))?;
 
-    let connection = app_state.local_db.lock().await;
+    let connection = app_state.local_db.clone().lock_owned().await;
 
-    let was_enabled = disable_channel(&connection, guild, interaction.channel_id).await?;
+    let was_enabled = disable_channel(connection, guild, interaction.channel_id).await?;
     let msg = if was_enabled {
         "DAAS has been disabled for this channel"
     } else {

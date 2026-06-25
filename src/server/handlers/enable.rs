@@ -26,10 +26,10 @@ pub async fn enable(interaction: CommandInteraction, app_state: &AppState) -> Re
         .guild_id
         .ok_or(Error::MalformedInput("no guild id"))?;
 
-    let connection = app_state.local_db.lock().await;
+    let connection = app_state.local_db.clone().lock_owned().await;
 
     let already_enabled = enable_channel(
-        &connection,
+        connection,
         guild,
         interaction.channel_id,
         interaction.user.id,

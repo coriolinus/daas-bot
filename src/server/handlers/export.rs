@@ -31,9 +31,9 @@ pub async fn export(
         .guild_id
         .ok_or(Error::MalformedInput("no guild id"))?;
 
-    let connection = app_state.local_db.lock().await;
+    let connection = app_state.local_db.clone().lock_owned().await;
 
-    if !channel_is_enabled(&connection, guild, interaction.channel_id).await? {
+    if !channel_is_enabled(connection, guild, interaction.channel_id).await? {
         return Ok(Either::Left(Message::from(
             CreateInteractionResponseMessage::new()
                 .ephemeral(true)
