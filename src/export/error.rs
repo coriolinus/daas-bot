@@ -12,6 +12,12 @@ pub enum Error {
         #[source]
         source: Box<dyn std::error::Error + Send>,
     },
+    #[error("{context}")]
+    Io {
+        context: &'static str,
+        #[source]
+        source: std::io::Error,
+    },
 }
 
 impl Error {
@@ -25,6 +31,10 @@ impl Error {
             channel,
             source: Box::new(send_err),
         }
+    }
+
+    pub(crate) fn io(context: &'static str) -> impl FnOnce(std::io::Error) -> Self {
+        move |source| Self::Io { context, source }
     }
 }
 

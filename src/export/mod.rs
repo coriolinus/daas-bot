@@ -15,7 +15,8 @@ use rusqlite::Connection;
 use serenity::all::{
     ChannelId, CommandInteraction, Http, Message, MessageId, MessagePagination, ReactionType,
 };
-use tokio::{select, spawn, sync::mpsc};
+use tempfile::NamedTempFile;
+use tokio::{select, spawn, sync::mpsc, task::block_in_place};
 
 use crate::sql::export;
 
@@ -109,7 +110,21 @@ impl Exporter {
             }
         }
 
-        todo!("export the database")
+        let temp_path = NamedTempFile::new()
+            .map_err(Error::io("creating named tempfile"))?
+            .into_temp_path();
+        export::vacuum_into(
+            &self.connection,
+            temp_path
+                .to_str()
+                .expect("named temp files generate unicode names"),
+        )
+        .await?;
+        let data = block_in_place(|| {
+            std::fs::read(&temp_path).map_err(Error::io("reading exported data from filesystem"))
+        })?;
+
+        Ok(data)
     }
 }
 

@@ -184,3 +184,14 @@ pub async fn add_vote(connection: &mut Connection, vote: &Vote) -> Result<()> {
         Ok(())
     })
 }
+
+/// Export this database to the specified filename
+pub async fn vacuum_into(connection: &Connection, path: &str) -> Result<()> {
+    block_in_place(|| {
+        let query = "VACUUM INTO :path";
+        let mut stmt = connection.prepare_cached(query)?;
+        stmt.execute(named_params! {":path": path})?;
+
+        Ok(())
+    })
+}
