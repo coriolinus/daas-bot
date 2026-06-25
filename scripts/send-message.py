@@ -140,7 +140,7 @@ def main() -> None:
     timestamp  = str(int(time.time()))
     signature  = sign(public_key, timestamp, body)
 
-    url = f"http://{args.host}/"
+    url = args.host if args.host.startswith(("http://", "https://")) else f"http://{args.host}"
     cmd = [
         "curl", "-s", "-i",
         "-X", "POST",
