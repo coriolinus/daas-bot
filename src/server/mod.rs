@@ -5,7 +5,7 @@ mod validate;
 
 use std::sync::Arc;
 
-use actix_web::{App, HttpResponse, HttpServer, post, web};
+use actix_web::{App, HttpResponse, HttpServer, middleware::Logger, post, web};
 use anyhow::Context as _;
 use log::{info, warn};
 use rusqlite::Connection;
@@ -59,14 +59,27 @@ impl AppState {
 #[post("/")]
 async fn handle_interaction(
     app_state: web::Data<AppState>,
-    signature: web::Header<XSignatureEd25519>,
-    timestamp: web::Header<XSignatureTimestamp>,
+    signature: Option<web::Header<XSignatureEd25519>>,
+    timestamp: Option<web::Header<XSignatureTimestamp>>,
     body: web::Bytes,
 ) -> Result<HttpResponse> {
     info!("handling request to /");
+
+    // we specified the headers as optional in the extractors, because
+    // in the event they are unset we still want to capture them and use our custom
+    // validation error.
+    let signature = signature
+        .as_deref()
+        .map(|header| &**header)
+        .unwrap_or_default();
+    let timestamp = timestamp
+        .as_deref()
+        .map(|header| &**header)
+        .unwrap_or_default();
+
     app_state
         .verifier
-        .verify(&signature, &timestamp, &body)
+        .verify(signature, timestamp, &body)
         .map_err(|_| Error::Validation)
         .inspect_err(|_| warn!("verifier failed to verify incoming request"))?;
 
@@ -114,6 +127,7 @@ pub async fn run(args: Args, http: Http) -> anyhow::Result<()> {
     let app_data = web::Data::new(app_state.clone());
     HttpServer::new(move || {
         App::new()
+            .wrap(Logger::default())
             .app_data(app_data.clone())
             .service(handle_interaction)
     })
