@@ -66,6 +66,6 @@ Note that at no point is any database reused. This allows for schema migrations 
 
 1. `source .env`: Populates the environment variables with common options and secrets.
 1. `cargo run`: Starts the server.
-1. (console 2) `npx localtunnel --port 8080`: Opens a transient tunnel from a random ID to your local server
+1. (console 2) `cloudflared tunnel --url http://localhost:8080`: Opens a transient tunnel from a random ID to your local server
 1. (browser) adjust [bot settings](https://discord.com/developers/applications/1514586560169771129/information) to update interactions endpoint url
 1. Test in Discord on any enabled server by running `/daas help` or any other `/daas` command
