@@ -6,6 +6,8 @@ use crate::sql::ToSqlInteger as _;
 
 use super::Result;
 
+refinery::embed_migrations!("src/sql/bot/migrations");
+
 /// enable a channel in the local database
 ///
 /// Returns `true` if the channel was enabled, or `false` if it had already previously been enabled

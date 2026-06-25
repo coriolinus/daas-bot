@@ -18,7 +18,7 @@ use self::{
     into_response::IntoResponse,
     validate::{XSignatureEd25519, XSignatureTimestamp},
 };
-use crate::cli::Args;
+use crate::{cli::Args, sql};
 
 #[derive(derive_more::Debug, Clone)]
 struct AppState {
@@ -40,12 +40,14 @@ impl AppState {
         let verifier =
             Verifier::try_new(public_key).context("cryptographically parsing public key")?;
 
-        let local_db = Arc::new(Mutex::new(
-            Connection::open(&config.database_path).context(format!(
-                "opening local database at {}",
-                config.database_path.display()
-            ))?,
-        ));
+        let mut connection = Connection::open(&config.database_path).context(format!(
+            "opening local database at {}",
+            config.database_path.display()
+        ))?;
+        sql::migrations::runner()
+            .run(&mut connection)
+            .context("applying migrations to local db")?;
+        let local_db = Arc::new(Mutex::new(connection));
 
         Ok(Self {
             config,
