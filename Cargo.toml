@@ -10,6 +10,7 @@ clap = { version = "4.6.1", features = ["derive", "env", "wrap_help"] }
 derive_more = { version = "2.1.1", features = ["debug", "deref", "into"] }
 either = "1.16.0"
 hex = "0.4.3"
+jiff = { version = "0.2.29", default-features = false, features = ["std"] }
 refinery = { version = "0.9.2", features = ["rusqlite"] }
 rusqlite = { version = "0.39", features = ["cache"] }
 serde_json = "1.0.150"

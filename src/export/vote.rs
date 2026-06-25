@@ -1,4 +1,4 @@
-use serenity::all::{MessageId, Reaction, ReactionType, UserId};
+use serenity::all::{MessageId, ReactionType, UserId};
 
 fn emoji_of(reaction: &ReactionType) -> String {
     match reaction {

@@ -23,6 +23,8 @@ pub enum Error {
     UnknownCommand,
     #[error("interacting with the local database")]
     LocalDb(#[from] crate::sql::Error),
+    #[error("exporting channel to database")]
+    Export(#[from] crate::export::Error),
 }
 
 impl ResponseError for Error {
@@ -32,7 +34,7 @@ impl ResponseError for Error {
             Error::MalformedInput(_)
             | Error::UnsupportedInteractionType
             | Error::UnknownCommand => StatusCode::BAD_REQUEST,
-            Error::LocalDb(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            Error::LocalDb(_) | Error::Export(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 
