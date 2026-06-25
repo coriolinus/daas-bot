@@ -1,4 +1,4 @@
-use serenity::all::{ChannelId, GuildId, UserId};
+use serenity::all::{ChannelId, GuildId, MessageId, UserId};
 
 pub(crate) trait ToSqlInteger: Sized {
     /// Transform `self` into a `u64`
@@ -23,4 +23,4 @@ macro_rules! impl_to_sql_integer_via_get {
     };
 }
 
-impl_to_sql_integer_via_get!(ChannelId, GuildId, UserId);
+impl_to_sql_integer_via_get!(ChannelId, GuildId, UserId, MessageId);

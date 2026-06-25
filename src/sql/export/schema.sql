@@ -2,7 +2,7 @@ PRAGMA foreign_keys = ON;
 
 -- Items
 CREATE TABLE items (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    id          INTEGER PRIMARY KEY, -- message id (snowflake)
     posted_by   INTEGER NOT NULL REFERENCES users(id),
     title       TEXT    NOT NULL,
     description TEXT    NOT NULL,
@@ -27,7 +27,7 @@ CREATE TABLE tag_associations (
 
 -- Users
 CREATE TABLE users (
-    id           INTEGER PRIMARY KEY,
+    id           INTEGER PRIMARY KEY, -- user id (snowflake)
     display_name TEXT    NOT NULL
 );
 

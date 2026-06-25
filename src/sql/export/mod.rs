@@ -56,7 +56,7 @@ async fn ensure_user(
 
 /// Ensure a tag exists in the export database.
 ///
-/// Returns the tag's primary key and whether or not it was created new.
+/// Returns the tag's primary key.
 async fn ensure_tag(connection: &Connection, tag: &str) -> Result<Pk> {
     block_in_place(|| {
         let query = "INSERT INTO tags (description)
@@ -106,13 +106,14 @@ pub async fn add_item(connection: &mut Connection, item: &ItemWithMetadata) -> R
         ensure_user(&transaction, item.posted_by, &item.posted_by_display_name).await?;
 
     let item_id = block_in_place(|| -> Result<Pk> {
-        let query = "INSERT INTO items (posted_by, title, description, created, edited)
-            VALUES (:posted_by, :title, :description, :created, :edited)
+        let query = "INSERT INTO items (id, posted_by, title, description, created, edited)
+            VALUES (:id, :posted_by, :title, :description, :created, :edited)
             RETURNING id";
 
         let mut stmt = transaction.prepare_cached(query)?;
         let id = stmt.query_one(
             named_params! {
+                ":id": item.message_id.to_sql(),
                 ":posted_by": posted_by,
                 ":title": &item.item.title,
                 ":description": &item.item.description,
