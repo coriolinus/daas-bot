@@ -84,6 +84,7 @@ async fn handle_interaction(
         .verify(signature, timestamp, &body)
         .map_err(|_| Error::Validation)
         .inspect_err(|_| warn!("verifier failed to verify incoming request"))?;
+    debug!("request headers validate successfully");
 
     let interaction = serde_json::from_slice::<Interaction>(&body)
         .map_err(|_| Error::MalformedInput("failed to deserialize interaction"))
