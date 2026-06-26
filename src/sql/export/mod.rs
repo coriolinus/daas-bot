@@ -7,7 +7,7 @@ use crate::{
     sql::ToSqlInteger as _,
 };
 
-use super::Result;
+use super::{Error, Result};
 
 /// Schema for the exported database.
 ///
@@ -19,10 +19,14 @@ use super::Result;
 const EXPORT_SCHEMA: &str = include_str!("schema.sql");
 
 pub async fn apply_schema(connection: OwnedMutexGuard<Connection>) -> Result<()> {
-    spawn_blocking(move || connection.execute_batch(EXPORT_SCHEMA).map_err(Into::into))
-        .await
-        .map_err(Into::into)
-        .flatten()
+    spawn_blocking(move || {
+        connection
+            .execute_batch(EXPORT_SCHEMA)
+            .map_err(Error::sql("applying schema to export db"))
+    })
+    .await
+    .map_err(Into::into)
+    .flatten()
 }
 
 /// An `INTEGER PRIMARY KEY` identifying a row in the database.
@@ -45,11 +49,15 @@ fn ensure_user(connection: &Connection, user_id: UserId, display_name: &str) -> 
             INTO users (id, display_name)
             VALUES (:user_id, :display_name)";
 
-    let mut stmt = connection.prepare_cached(query)?;
-    let rows = stmt.execute(named_params! {
-        ":user_id": user_id.to_sql(),
-        ":display_name": display_name,
-    })?;
+    let mut stmt = connection
+        .prepare_cached(query)
+        .map_err(Error::sql("preparing statement to ensure user"))?;
+    let rows = stmt
+        .execute(named_params! {
+            ":user_id": user_id.to_sql(),
+            ":display_name": display_name,
+        })
+        .map_err(Error::sql("executing statement to ensure user"))?;
 
     Ok((user_id.to_sql(), rows != 0))
 }
@@ -63,13 +71,17 @@ fn ensure_tag(connection: &Connection, tag: &str) -> Result<Pk> {
             ON CONFLICT DO NOTHING
             RETURNING id";
 
-    let mut stmt = connection.prepare_cached(query)?;
-    let id = stmt.query_one(
-        named_params! {
-            ":description": tag,
-        },
-        |row| row.get(0),
-    )?;
+    let mut stmt = connection
+        .prepare_cached(query)
+        .map_err(Error::sql("preparing statement to ensure tag"))?;
+    let id = stmt
+        .query_one(
+            named_params! {
+                ":description": tag,
+            },
+            |row| row.get(0),
+        )
+        .map_err(Error::sql("executing statement to ensure tag"))?;
 
     Ok(id)
 }
@@ -82,11 +94,15 @@ fn ensure_tag_association(connection: &Connection, item_id: Pk, tag_id: Pk) -> R
             VALUES (:item_id, :tag_id)
             ON CONFLICT DO NOTHING";
 
-    let mut stmt = connection.prepare_cached(query)?;
-    let rows = stmt.execute(named_params! {
-        ":item_id": item_id,
-        ":tag_id": tag_id,
-    })?;
+    let mut stmt = connection
+        .prepare_cached(query)
+        .map_err(Error::sql("preparing statement to ensure tag association"))?;
+    let rows = stmt
+        .execute(named_params! {
+            ":item_id": item_id,
+            ":tag_id": tag_id,
+        })
+        .map_err(Error::sql("executing statement to ensure tag association"))?;
 
     Ok(rows != 0)
 }
@@ -101,7 +117,7 @@ pub async fn add_item(
     spawn_blocking(move || -> Result<Pk> {
 
     // gives us rollback on error
-    let transaction = connection.transaction()?;
+    let transaction = connection.transaction().map_err(Error::sql("creating transaction to add item"))?;
 
     let (posted_by, _created) =
         ensure_user(&transaction, item.posted_by, &item.posted_by_display_name)?;
@@ -111,7 +127,7 @@ pub async fn add_item(
             RETURNING id";
 
         let item_id = {
-            let mut stmt = transaction.prepare_cached(query)?;
+            let mut stmt = transaction.prepare_cached(query).map_err(Error::sql("preparing statement to add item"))?;
             stmt.query_one(
                 named_params! {
                     ":id": item.message_id.to_sql(),
@@ -122,7 +138,7 @@ pub async fn add_item(
                     ":edited": item.modified_at.map(|modified_at| modified_at.to_rfc3339().expect("infallible when using chrono-based timestamps")),
                 },
                 |row| row.get(0),
-            )?
+            ).map_err(Error::sql("executing statement to add item"))?
         };
 
         for tag in &item.item.tags {
@@ -130,7 +146,7 @@ pub async fn add_item(
             ensure_tag_association(&transaction, item_id, tag_id)?;
         }
 
-        transaction.commit()?;
+        transaction.commit().map_err(Error::sql("commiting transaction to add item"))?;
 
         Ok(item_id)
     }).await.map_err(Into::into).flatten()
@@ -145,13 +161,17 @@ fn ensure_category(connection: &Connection, category: &str) -> Result<Pk> {
             ON CONFLICT DO NOTHING
             RETURNING id";
 
-    let mut stmt = connection.prepare_cached(query)?;
-    let id = stmt.query_one(
-        named_params! {
-            ":category": category,
-        },
-        |row| row.get(0),
-    )?;
+    let mut stmt = connection
+        .prepare_cached(query)
+        .map_err(Error::sql("preparing statement to ensure category"))?;
+    let id = stmt
+        .query_one(
+            named_params! {
+                ":category": category,
+            },
+            |row| row.get(0),
+        )
+        .map_err(Error::sql("executing statement to ensure category"))?;
 
     Ok(id)
 }
@@ -163,7 +183,9 @@ fn ensure_category(connection: &Connection, category: &str) -> Result<Pk> {
 pub async fn add_vote(mut connection: OwnedMutexGuard<Connection>, vote: Vote) -> Result<()> {
     spawn_blocking(move || -> Result<()> {
         // gives us rollback on error
-        let transaction = connection.transaction()?;
+        let transaction = connection
+            .transaction()
+            .map_err(Error::sql("creating transaction to add vote"))?;
 
         let category_id = ensure_category(&transaction, &vote.emoji)?;
 
@@ -171,15 +193,20 @@ pub async fn add_vote(mut connection: OwnedMutexGuard<Connection>, vote: Vote) -
             VALUES (:item_id, :user_id, :category_id)";
 
         {
-            let mut stmt = transaction.prepare_cached(query)?;
+            let mut stmt = transaction
+                .prepare_cached(query)
+                .map_err(Error::sql("preparing statement to add vote"))?;
             stmt.execute(named_params! {
                 ":item_id": vote.item_id.to_sql(),
                 ":user_id": vote.user_id.to_sql(),
                 ":category_id": category_id,
-            })?;
+            })
+            .map_err(Error::sql("executing statement to add vote"))?;
         }
 
-        transaction.commit()?;
+        transaction
+            .commit()
+            .map_err(Error::sql("commiting transaction to add vote"))?;
         Ok(())
     })
     .await
@@ -195,8 +222,11 @@ pub async fn vacuum_into(
     let path = path.into();
     spawn_blocking(move || {
         let query = "VACUUM INTO :path";
-        let mut stmt = connection.prepare_cached(query)?;
-        stmt.execute(named_params! {":path": path})?;
+        let mut stmt = connection
+            .prepare_cached(query)
+            .map_err(Error::sql("preparing statement to export database"))?;
+        stmt.execute(named_params! {":path": path})
+            .map_err(Error::sql("executing statement to export database"))?;
 
         Ok(())
     })

@@ -4,7 +4,7 @@ use tokio::{sync::OwnedMutexGuard, task::spawn_blocking};
 
 use crate::sql::ToSqlInteger as _;
 
-use super::Result;
+use super::{Error, Result};
 
 refinery::embed_migrations!("src/sql/bot/migrations");
 
@@ -23,12 +23,16 @@ pub async fn enable_channel(
             INTO enabled_channels (guild_id, channel_id, enabled_by)
             VALUES (:guild_id, :channel_id, :actor)";
 
-        let mut stmt = connection.prepare_cached(query)?;
-        let rows = stmt.execute(named_params! {
-            ":guild_id": guild.to_sql(),
-            ":channel_id": channel.to_sql(),
-            ":actor": actor.to_sql(),
-        })?;
+        let mut stmt = connection
+            .prepare_cached(query)
+            .map_err(Error::sql("preparing statement to enable channel"))?;
+        let rows = stmt
+            .execute(named_params! {
+                ":guild_id": guild.to_sql(),
+                ":channel_id": channel.to_sql(),
+                ":actor": actor.to_sql(),
+            })
+            .map_err(Error::sql("executing statement to enable channel"))?;
 
         Ok(rows != 0)
     })
@@ -50,11 +54,15 @@ pub async fn disable_channel(
             WHERE guild_id = :guild_id
             AND channel_id = :channel_id";
 
-        let mut stmt = connection.prepare_cached(query)?;
-        let rows = stmt.execute(named_params! {
-            ":guild_id": guild.to_sql(),
-            ":channel_id": channel.to_sql(),
-        })?;
+        let mut stmt = connection
+            .prepare_cached(query)
+            .map_err(Error::sql("preparing statement to disable channel"))?;
+        let rows = stmt
+            .execute(named_params! {
+                ":guild_id": guild.to_sql(),
+                ":channel_id": channel.to_sql(),
+            })
+            .map_err(Error::sql("executing statement to disable channel"))?;
 
         Ok(rows != 0)
     })
@@ -76,7 +84,9 @@ pub async fn channel_is_enabled(
             AND channel_id = :channel_id
         )";
 
-        let mut stmt = connection.prepare_cached(query)?;
+        let mut stmt = connection.prepare_cached(query).map_err(Error::sql(
+            "preparing statement to check if channel is enabled",
+        ))?;
         stmt.query_one(
             named_params! {
                 ":guild_id": guild.to_sql(),
@@ -84,7 +94,9 @@ pub async fn channel_is_enabled(
             },
             |row| row.get(0),
         )
-        .map_err(Into::into)
+        .map_err(Error::sql(
+            "executing statement to check if channel is enabled",
+        ))
     })
     .await
     .map_err(Into::into)

@@ -68,9 +68,9 @@ pub struct Exporter {
 
 impl Exporter {
     pub async fn new(interaction: CommandInteraction, http: Arc<Http>) -> Result<Self> {
-        let connection = Arc::new(Mutex::new(
-            Connection::open_in_memory().map_err(crate::sql::Error::from)?,
-        ));
+        let connection = Arc::new(Mutex::new(Connection::open_in_memory().map_err(
+            crate::sql::Error::sql("opening database for export in memory"),
+        )?));
         export::apply_schema(connection.clone().lock_owned().await).await?;
 
         Ok(Self {
