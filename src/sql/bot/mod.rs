@@ -10,7 +10,7 @@ refinery::embed_migrations!("src/sql/bot/migrations");
 
 /// enable a channel in the local database
 ///
-/// Returns `true` if the channel was enabled, or `false` if it had already previously been enabled
+/// Returns `true` if the channel was newly enabled, or `false` if it had already previously been enabled
 pub async fn enable_channel(
     connection: OwnedMutexGuard<Connection>,
     guild: GuildId,

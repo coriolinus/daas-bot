@@ -28,7 +28,7 @@ pub async fn enable(interaction: CommandInteraction, app_state: &AppState) -> Re
 
     let connection = app_state.local_db.clone().lock_owned().await;
 
-    let already_enabled = enable_channel(
+    let newly_enabled = enable_channel(
         connection,
         guild,
         interaction.channel_id,
@@ -36,13 +36,13 @@ pub async fn enable(interaction: CommandInteraction, app_state: &AppState) -> Re
     )
     .await?;
 
-    let msg = if already_enabled {
-        "DAAS was already enabled for this channel"
-    } else {
+    let msg = if newly_enabled {
         "DAAS enabled for this channel. Run `/daas export` to perform an export."
+    } else {
+        "DAAS was already enabled for this channel"
     };
     Ok(CreateInteractionResponseMessage::new()
-        .ephemeral(already_enabled)
+        .ephemeral(newly_enabled)
         .content(msg)
         .into())
 }
