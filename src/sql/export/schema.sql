@@ -13,10 +13,10 @@ CREATE TABLE items (
 -- Tags
 CREATE TABLE tags (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    description TEXT    NOT NULL,
+    description TEXT    NOT NULL
 );
 
-CREATE UNIQUE INDEX ON tags (description);
+CREATE UNIQUE INDEX tag_description_idx ON tags (description);
 
 -- Tag associations
 CREATE TABLE tag_associations (
@@ -34,10 +34,10 @@ CREATE TABLE users (
 -- Categories
 CREATE TABLE categories (
     id      INTEGER PRIMARY KEY AUTOINCREMENT,
-    emoji   TEXT    NOT NULL,
+    emoji   TEXT    NOT NULL
 );
 
-CREATE UNIQUE INDEX ON categories (emoji);
+CREATE UNIQUE INDEX category_emoji_idx ON categories (emoji);
 
 -- Votes
 CREATE TABLE votes (
