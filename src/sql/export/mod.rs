@@ -170,7 +170,7 @@ pub async fn add_vote(connection: &mut Connection, vote: &Vote) -> Result<()> {
 
     let category_id = ensure_category(&transaction, &vote.emoji).await?;
 
-    block_in_place(|| {
+    block_in_place(|| -> Result<()> {
         let query = "INSERT INTO votes (item_id, user_id, category_id)
             VALUES (:item_id, :user_id, :category_id)";
 
@@ -182,7 +182,10 @@ pub async fn add_vote(connection: &mut Connection, vote: &Vote) -> Result<()> {
         })?;
 
         Ok(())
-    })
+    })?;
+
+    transaction.commit()?;
+    Ok(())
 }
 
 /// Export this database to the specified filename
