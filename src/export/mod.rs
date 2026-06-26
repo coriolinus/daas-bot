@@ -68,11 +68,12 @@ impl Exporter {
     /// Drive this export to completion.
     pub async fn drive(mut self) -> Result<Vec<u8>> {
         const HIGH_BUFFER_SIZE: usize = 128;
+        const REACTION_PROCESSING_TASKS: usize = 8;
 
         let (message_pages_tx, message_pages_rx) = mpsc::channel(2); // provide backpressure
         let (error_tx, mut error_rx) = mpsc::channel(1);
         let (item_tx, mut item_rx) = mpsc::channel(HIGH_BUFFER_SIZE);
-        let (reaction_tx, reaction_rx) = mpsc::channel(HIGH_BUFFER_SIZE);
+        let (reaction_tx, reaction_rx) = async_channel::bounded(HIGH_BUFFER_SIZE);
         let (votes_tx, votes_rx) = mpsc::channel(HIGH_BUFFER_SIZE);
         let (persisted_items_tx, persisted_items_rx) = mpsc::channel(2);
         let (persistable_votes_tx, mut persistable_votes_rx) = mpsc::channel(HIGH_BUFFER_SIZE);
@@ -84,12 +85,14 @@ impl Exporter {
             error_tx.clone(),
         ));
         spawn(process_messages(message_pages_rx, item_tx, reaction_tx));
-        spawn(fetch_reaction_users(
-            self.http.clone(),
-            reaction_rx,
-            votes_tx,
-            error_tx,
-        ));
+        for _ in 0..REACTION_PROCESSING_TASKS {
+            spawn(fetch_reaction_users(
+                self.http.clone(),
+                reaction_rx.clone(),
+                votes_tx.clone(),
+                error_tx.clone(),
+            ));
+        }
         spawn(hold_votes_for_relevant_item_persistence(
             persisted_items_rx,
             votes_rx,
@@ -181,7 +184,7 @@ async fn fetch_message_pages(
 async fn process_messages(
     mut msg_rx: mpsc::Receiver<Vec<Message>>,
     item_tx: mpsc::Sender<ItemWithMetadata>,
-    reaction_tx: mpsc::Sender<ReactionRequest>,
+    reaction_tx: async_channel::Sender<ReactionRequest>,
 ) {
     macro_rules! or_break {
         ($e:expr) => {
@@ -212,7 +215,7 @@ async fn process_messages(
 /// Fetch the reaction details for a single `(message, reaction)` pair, dispatching votes and errors as appropriate.
 async fn fetch_reaction_users(
     http: Arc<Http>,
-    mut reaction_rx: mpsc::Receiver<ReactionRequest>,
+    reaction_rx: async_channel::Receiver<ReactionRequest>,
     vote_tx: mpsc::Sender<Vote>,
     err_tx: mpsc::Sender<Error>,
 ) {
@@ -230,7 +233,7 @@ async fn fetch_reaction_users(
 
     const REACTION_USERS_LIMIT: u8 = 100;
 
-    'receive: while let Some(reaction_request) = reaction_rx.recv().await {
+    'receive: while let Ok(reaction_request) = reaction_rx.recv().await {
         let mut after = None;
 
         loop {
