@@ -18,6 +18,8 @@ pub enum Error {
         #[source]
         source: std::io::Error,
     },
+    #[error("failed to await reading from filesystem")]
+    ReadFilesystemJoinFailure(#[source] tokio::task::JoinError),
 }
 
 impl Error {

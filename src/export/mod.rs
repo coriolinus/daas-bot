@@ -20,7 +20,7 @@ use tempfile::NamedTempFile;
 use tokio::{
     select, spawn,
     sync::{Mutex, mpsc},
-    task::block_in_place,
+    task::spawn_blocking,
 };
 
 use crate::sql::export;
@@ -185,9 +185,12 @@ impl Exporter {
                 .expect("named temp files generate unicode names"),
         )
         .await?;
-        let data = block_in_place(|| {
+        let data = spawn_blocking(move || {
             std::fs::read(&temp_path).map_err(Error::io("reading exported data from filesystem"))
-        })?;
+        })
+        .await
+        .map_err(Error::ReadFilesystemJoinFailure)
+        .flatten()?;
 
         debug!("exporter: drive: successfully read export, finished");
         Ok(data)
