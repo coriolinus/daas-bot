@@ -11,7 +11,7 @@ use std::{
     sync::Arc,
 };
 
-use log::{debug, warn};
+use log::{debug, trace, warn};
 use rusqlite::Connection;
 use serenity::all::{
     ChannelId, CommandInteraction, Http, Message, MessageId, MessagePagination, ReactionType,
@@ -242,6 +242,9 @@ async fn process_messages(
         for mut msg in messages {
             let reactions = std::mem::take(&mut msg.reactions);
             if let Ok(item) = (&msg).try_into() {
+                trace!(
+                    "exporter: process_messages: message parsed as item, dispatching reaction request"
+                );
                 for reaction in reactions {
                     or_break!(
                         reaction_tx
@@ -252,6 +255,8 @@ async fn process_messages(
                 }
 
                 or_break!(item_tx.send(item).await; "exporter: process_messages: item_tx send failed, aborting");
+            } else {
+                trace!("exporter: process_messages: message did not parse as item");
             }
         }
     }
@@ -274,7 +279,8 @@ async fn fetch_reaction_users(
 
         loop {
             debug!(
-                "exporter: fetch_reaction_users: getting reaction users after user id {after:?}"
+                "exporter: fetch_reaction_users: getting reaction users for msg {} after user id {after:?}",
+                reaction_request.message_id,
             );
 
             let users = dispatch_err!(
