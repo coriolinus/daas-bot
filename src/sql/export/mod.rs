@@ -189,6 +189,7 @@ pub async fn add_vote(mut connection: OwnedMutexGuard<Connection>, vote: Vote) -
             .transaction()
             .map_err(Error::sql("creating transaction to add vote"))?;
 
+        let user_id = ensure_user(&transaction, vote.user_id, &vote.user_display_name)?.0;
         let category_id = ensure_category(&transaction, &vote.emoji)?;
 
         let query = "INSERT INTO votes (item_id, user_id, category_id)
@@ -200,7 +201,7 @@ pub async fn add_vote(mut connection: OwnedMutexGuard<Connection>, vote: Vote) -
                 .map_err(Error::sql("preparing statement to add vote"))?;
             stmt.execute(named_params! {
                 ":item_id": vote.item_id.to_sql(),
-                ":user_id": vote.user_id.to_sql(),
+                ":user_id": user_id,
                 ":category_id": category_id,
             })
             .map_err(Error::sql("executing statement to add vote"))?;

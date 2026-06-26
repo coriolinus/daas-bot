@@ -329,6 +329,7 @@ async fn fetch_reaction_users(
                     .send(Vote::new(
                         reaction_request.message_id,
                         user.id,
+                        user.display_name().to_owned(),
                         &reaction_request.reaction_type,
                     ))
                     .await => 'receive;
