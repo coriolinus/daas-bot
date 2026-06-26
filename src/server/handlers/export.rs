@@ -2,7 +2,7 @@ use std::{fmt::Write as _, sync::Arc};
 
 use either::Either;
 use jiff::{
-    Timestamp,
+    SpanRound, Timestamp, Unit,
     fmt::{friendly::SpanPrinter, rfc2822::DateTimePrinter},
 };
 use log::{debug, info, warn};
@@ -71,6 +71,16 @@ async fn gather_export_and_update_response(interaction: CommandInteraction, http
         let data = exporter.drive().await?;
 
         let duration = Timestamp::now() - now;
+        // rounding here both normalizes the units in play
+        // and eliminates units too small to care about
+        let duration = duration
+            .round(
+                SpanRound::new()
+                    .largest(Unit::Hour)
+                    .smallest(Unit::Millisecond),
+            )
+            // if rounding doesn't work, just use what we already have
+            .unwrap_or(duration);
 
         let content = format!(
             "Exported #{channel_name} at {} in {}",
@@ -79,7 +89,6 @@ async fn gather_export_and_update_response(interaction: CommandInteraction, http
                 .unwrap_or_else(|_| now.to_string()),
             SpanPrinter::new()
                 .hours_minutes_seconds(true)
-                .precision(3.into())
                 .span_to_string(&duration),
         );
         info!("successfully completed export job");
