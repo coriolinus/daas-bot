@@ -11,6 +11,7 @@ use std::{
     sync::Arc,
 };
 
+use log::{debug, warn};
 use rusqlite::Connection;
 use serenity::all::{
     ChannelId, CommandInteraction, Http, Message, MessageId, MessagePagination, ReactionType,
@@ -48,8 +49,9 @@ impl ReactionRequest {
 
 /// Break out of an event loop in the event of an error.
 macro_rules! or_break {
-    ($e:expr $(=> $label:lifetime)? ) => {
+    ($e:expr $(=> $label:lifetime)? $(; $log:literal)?) => {
         if $e.is_err() {
+            $(warn!($log);)?
             break $($label)?;
         }
     };
@@ -85,6 +87,8 @@ impl Exporter {
         const HIGH_BUFFER_SIZE: usize = 128;
         const REACTION_PROCESSING_TASKS: usize = 8;
 
+        debug!("exporter: drive: start");
+
         let (message_pages_tx, message_pages_rx) = mpsc::channel(2); // provide backpressure
         let (error_tx, mut error_rx) = mpsc::channel(1);
         let (item_tx, mut item_rx) = mpsc::channel(HIGH_BUFFER_SIZE);
@@ -114,21 +118,31 @@ impl Exporter {
             persistable_votes_tx,
         ));
 
+        debug!("exporter: drive: beginning event loop");
+
         loop {
             select! {
-                Some(err) = error_rx.recv() => return Err(err),
+                Some(err) = error_rx.recv() => {
+                    debug!("exporter: drive: rx error ({err}), aborting");
+                    return Err(err)},
                 Some(item) = item_rx.recv() =>  {
+                    debug!("exporter: drive: rx item, persisting");
                     let message_id = item.message_id;
                     export::add_item(self.connection.clone().lock_owned().await, item).await?;
                     persisted_items_tx.send(message_id).await.map_err(Error::send_failed("persisted_items"))?;
                 }
                 Some(vote) = persistable_votes_rx.recv() => {
+                    debug!("exporter: drive: rx vote, persisting");
                     export::add_vote(self.connection.clone().lock_owned().await, vote).await?;
                 }
-                else => break,
+                else => {
+                    debug!("exporter: drive: all input channels closed; breaking event loop");
+                    break;
+                },
             }
         }
 
+        debug!("exporter: drive: beginning export of in-memory db to disk");
         let temp_path = NamedTempFile::new()
             .map_err(Error::io("creating named tempfile"))?
             .into_temp_path();
@@ -143,6 +157,7 @@ impl Exporter {
             std::fs::read(&temp_path).map_err(Error::io("reading exported data from filesystem"))
         })?;
 
+        debug!("exporter: drive: successfully read export, finished");
         Ok(data)
     }
 }
@@ -159,6 +174,7 @@ async fn fetch_message_pages(
     msg_tx: mpsc::Sender<Vec<Message>>,
     err_tx: mpsc::Sender<Error>,
 ) {
+    debug!("exporter: fetch_message_pages: starting task");
     let mut before = None;
 
     loop {
@@ -166,6 +182,7 @@ async fn fetch_message_pages(
         // > limit?	integer	Max number of messages to return (1-100)
         const GET_MESSAGES_LIMIT: Option<u8> = Some(100);
 
+        debug!("exporter: fetch_message_pages: fetching messages before msg id \"{before:?}\"");
         match http
             .get_messages(
                 channel_id,
@@ -181,19 +198,18 @@ async fn fetch_message_pages(
             Ok(messages) => {
                 if messages.is_empty() {
                     // we've exhausted the messages in the channel
+                    debug!("exporter: fetch_message_pages: no messages received, ending task");
                     break;
                 }
-                if msg_tx.send(messages).await.is_err() {
-                    break;
-                }
+                or_break!(msg_tx.send(messages).await; "exporter: fetch_message_pages: msg_tx send failed, aborting");
             }
             Err(err) => {
-                if err_tx.send(err).await.is_err() {
-                    break;
-                }
+                or_break!(err_tx.send(err).await; "exporter: fetch_message_pages: err_tx send failed, aborting");
             }
         }
     }
+
+    debug!("exporter: fetch_message_pages: ending task");
 }
 
 /// Process a batch of messages: parse them into `ItemWithMetadata` instances and send each to the relevant sender
@@ -202,7 +218,13 @@ async fn process_messages(
     item_tx: mpsc::Sender<ItemWithMetadata>,
     reaction_tx: async_channel::Sender<ReactionRequest>,
 ) {
+    debug!("exporter: process_messages: starting task");
     while let Some(messages) = msg_rx.recv().await {
+        debug!(
+            "exporter: process_messages: received {} messages",
+            messages.len()
+        );
+
         for mut msg in messages {
             let reactions = std::mem::take(&mut msg.reactions);
             if let Ok(item) = (&msg).try_into() {
@@ -210,14 +232,16 @@ async fn process_messages(
                     or_break!(
                         reaction_tx
                             .send(ReactionRequest::new(&msg, reaction.reaction_type))
-                            .await
+                            .await;
+                        "exporter: process_messages: reaction_tx send failed, aborting"
                     );
                 }
 
-                or_break!(item_tx.send(item).await);
+                or_break!(item_tx.send(item).await; "exporter: process_messages: item_tx send failed, aborting");
             }
         }
     }
+    debug!("exporter: process_messages: ending task");
 }
 
 /// Fetch the reaction details for a single `(message, reaction)` pair, dispatching votes and errors as appropriate.
@@ -227,11 +251,14 @@ async fn fetch_reaction_users(
     vote_tx: mpsc::Sender<Vote>,
     err_tx: mpsc::Sender<Error>,
 ) {
+    debug!("exporter: fetch_reaction_users: starting task");
+
     macro_rules! dispatch_err {
         ($e:expr => $tx:expr) => {{
             match $e {
                 Ok(ok) => ok,
                 Err(e) => {
+                    warn!("exporter: fetch_reaction_users: error \"{e}\", aborting");
                     let _ = err_tx.send(e).await;
                     return;
                 }
@@ -245,6 +272,10 @@ async fn fetch_reaction_users(
         let mut after = None;
 
         loop {
+            debug!(
+                "exporter: fetch_reaction_users: getting reaction users after user id {after:?}"
+            );
+
             let users = dispatch_err!(
                 http.get_reaction_users(
                     reaction_request.channel_id,
@@ -257,25 +288,29 @@ async fn fetch_reaction_users(
             );
 
             if users.is_empty() {
+                debug!(
+                    "exporter: fetch_reaction_users: received no users, user collection complete"
+                );
                 continue 'receive;
             }
             after = users.last().map(|user| user.id.get());
 
             for user in users {
-                if vote_tx
+                or_break!(
+                    vote_tx
                     .send(Vote::new(
                         reaction_request.message_id,
                         user.id,
                         &reaction_request.reaction_type,
                     ))
-                    .await
-                    .is_err()
-                {
-                    return;
-                }
+                    .await => 'receive;
+                    "exporter: fetch_reaction_users: vote_tx send failed, aborting"
+                );
             }
         }
     }
+
+    debug!("exporter: fetch_reaction_users: ending task");
 }
 
 /// Collect votes and then reemit them on a separate channel when the prerequisite items have been persisted.
@@ -293,6 +328,8 @@ async fn hold_votes_for_relevant_item_persistence(
     mut votes_rx: mpsc::Receiver<Vote>,
     persistable_votes_tx: mpsc::Sender<Vote>,
 ) {
+    debug!("exporter: hold_votes_for_relevant_item_persistence: starting task");
+
     let mut persisted_items = HashSet::new();
     let mut pending_votes = HashMap::<_, Vec<_>>::new();
 
@@ -301,19 +338,35 @@ async fn hold_votes_for_relevant_item_persistence(
             Some(persisted_item) = persisted_items_rx.recv() => {
                 persisted_items.insert(persisted_item);
                 if let Some(votes) = pending_votes.remove(&persisted_item) {
+                    debug!("exporter: hold_votes_for_relevant_item_persistence: rx persisted item, releasing {} pending votes", votes.len());
                     for vote in votes {
-                        or_break!(persistable_votes_tx.send(vote).await => 'select);
+                        or_break!(
+                            persistable_votes_tx.send(vote).await => 'select;
+                            "exporter: hold_votes_for_relevant_item_persistence: send cached persistable vote failed, aborting"
+                        );
                     }
+                } else {
+                    debug!("exporter: hold_votes_for_relevant_item_persistence: rx persisted item, no pending votes yet");
                 }
             }
             Some(vote) = votes_rx.recv() => {
                 if persisted_items.contains(&vote.item_id) {
-                    or_break!(persistable_votes_tx.send(vote).await);
+                    debug!("exporter: hold_votes_for_relevant_item_persistence: rx vote, item already persisted, forwarding");
+                    or_break!(
+                        persistable_votes_tx.send(vote).await;
+                        "exporter: hold_votes_for_relevant_item_persistence: forwarding persistable vote failed, aborting"
+                    );
                 } else {
+                    debug!("exporter: hold_votes_for_relevant_item_persistence: rx vote, item not yet persisted, caching");
                     pending_votes.entry(vote.item_id).or_default().push(vote);
                 }
             }
-            else => break,
+            else => {
+                debug!("exporter: hold_votes_for_relevant_item_persistence: all input channels closed; breaking event loop");
+                break;
+            },
         }
     }
+
+    debug!("exporter: hold_votes_for_relevant_item_persistence: ending task");
 }
