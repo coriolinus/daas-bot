@@ -42,6 +42,15 @@ impl ReactionRequest {
     }
 }
 
+/// Break out of an event loop in the event of an error.
+macro_rules! or_break {
+    ($e:expr $(=> $label:lifetime)? ) => {
+        if $e.is_err() {
+            break $($label)?;
+        }
+    };
+}
+
 /// Container type which holds fundamental data about the command which launched this export,
 /// a handle to the Http client, and the Sqlite connection.
 ///
@@ -186,14 +195,6 @@ async fn process_messages(
     item_tx: mpsc::Sender<ItemWithMetadata>,
     reaction_tx: async_channel::Sender<ReactionRequest>,
 ) {
-    macro_rules! or_break {
-        ($e:expr) => {
-            if $e.is_err() {
-                break;
-            }
-        };
-    }
-
     while let Some(messages) = msg_rx.recv().await {
         for mut msg in messages {
             let reactions = std::mem::take(&mut msg.reactions);
@@ -285,30 +286,22 @@ async fn hold_votes_for_relevant_item_persistence(
     mut votes_rx: mpsc::Receiver<Vote>,
     persistable_votes_tx: mpsc::Sender<Vote>,
 ) {
-    macro_rules! or_return {
-        ($e:expr) => {
-            if $e.is_err() {
-                return;
-            }
-        };
-    }
-
     let mut persisted_items = HashSet::new();
     let mut pending_votes = HashMap::<_, Vec<_>>::new();
 
-    loop {
+    'select: loop {
         select! {
             Some(persisted_item) = persisted_items_rx.recv() => {
                 persisted_items.insert(persisted_item);
                 if let Some(votes) = pending_votes.remove(&persisted_item) {
                     for vote in votes {
-                        or_return!(persistable_votes_tx.send(vote).await);
+                        or_break!(persistable_votes_tx.send(vote).await => 'select);
                     }
                 }
             }
             Some(vote) = votes_rx.recv() => {
                 if persisted_items.contains(&vote.item_id) {
-                    or_return!(persistable_votes_tx.send(vote).await);
+                    or_break!(persistable_votes_tx.send(vote).await);
                 } else {
                     pending_votes.entry(vote.item_id).or_default().push(vote);
                 }
