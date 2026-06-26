@@ -109,7 +109,7 @@ async fn gather_export_and_update_response(interaction: CommandInteraction, http
 
     let files = data
         .map(|data| {
-            CreateAttachment::bytes(data, "export.sqlite").description(format!(
+            CreateAttachment::bytes(data, format!("{channel_name}.{now}.sqlite")).description(format!(
                 "The items and votes tabulated in #{channel_name}, as calculated at {now} by Daas Bot"
             ))
         })
