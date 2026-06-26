@@ -1,13 +1,13 @@
-use std::{fmt::Write as _, sync::Arc, thread};
+use std::{fmt::Write as _, sync::Arc};
 
 use either::Either;
 use jiff::Timestamp;
-use log::{debug, error, info, warn};
+use log::{debug, info, warn};
 use serenity::all::{
     CommandInteraction, CreateAttachment, CreateInteractionResponseFollowup,
     CreateInteractionResponseMessage, Http,
 };
-use tokio::{runtime, task::LocalSet};
+use tokio::task::spawn;
 
 use crate::{
     export::Exporter,
@@ -41,20 +41,8 @@ pub async fn export(
         )));
     }
 
-    // we need special handling for this future because it has a Sqlite connection,
-    // which is `!Send`, so we need to ensure that this task never moves between threads.
     let http = app_state.http.clone();
-    thread::spawn(move || {
-        let Ok(rt) = runtime::Builder::new_current_thread().enable_all().build() else {
-            error!("failed to create a current-thread runtime for the local set");
-            return;
-        };
-        rt.block_on(async {
-            LocalSet::new()
-                .run_until(gather_export_and_update_response(interaction, http))
-                .await;
-        });
-    });
+    spawn(gather_export_and_update_response(interaction, http));
 
     Ok(Either::Right(Defer::from(
         CreateInteractionResponseMessage::new(),

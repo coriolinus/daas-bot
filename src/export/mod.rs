@@ -16,7 +16,11 @@ use serenity::all::{
     ChannelId, CommandInteraction, Http, Message, MessageId, MessagePagination, ReactionType,
 };
 use tempfile::NamedTempFile;
-use tokio::{select, spawn, sync::mpsc, task::block_in_place};
+use tokio::{
+    select, spawn,
+    sync::{Mutex, mpsc},
+    task::block_in_place,
+};
 
 use crate::sql::export;
 
@@ -59,13 +63,15 @@ macro_rules! or_break {
 pub struct Exporter {
     interaction: CommandInteraction,
     http: Arc<Http>,
-    connection: Connection,
+    connection: Arc<Mutex<Connection>>,
 }
 
 impl Exporter {
     pub async fn new(interaction: CommandInteraction, http: Arc<Http>) -> Result<Self> {
-        let connection = Connection::open_in_memory().map_err(crate::sql::Error::from)?;
-        export::apply_schema(&connection).await?;
+        let connection = Arc::new(Mutex::new(
+            Connection::open_in_memory().map_err(crate::sql::Error::from)?,
+        ));
+        export::apply_schema(connection.clone().lock_owned().await).await?;
 
         Ok(Self {
             interaction,
@@ -75,7 +81,7 @@ impl Exporter {
     }
 
     /// Drive this export to completion.
-    pub async fn drive(mut self) -> Result<Vec<u8>> {
+    pub async fn drive(self) -> Result<Vec<u8>> {
         const HIGH_BUFFER_SIZE: usize = 128;
         const REACTION_PROCESSING_TASKS: usize = 8;
 
@@ -112,11 +118,12 @@ impl Exporter {
             select! {
                 Some(err) = error_rx.recv() => return Err(err),
                 Some(item) = item_rx.recv() =>  {
-                    export::add_item(&mut self.connection, &item).await?;
-                    persisted_items_tx.send(item.message_id).await.map_err(Error::send_failed("persisted_items"))?;
+                    let message_id = item.message_id;
+                    export::add_item(self.connection.clone().lock_owned().await, item).await?;
+                    persisted_items_tx.send(message_id).await.map_err(Error::send_failed("persisted_items"))?;
                 }
                 Some(vote) = persistable_votes_rx.recv() => {
-                    export::add_vote(&mut self.connection, &vote).await?;
+                    export::add_vote(self.connection.clone().lock_owned().await, vote).await?;
                 }
                 else => break,
             }
@@ -126,7 +133,7 @@ impl Exporter {
             .map_err(Error::io("creating named tempfile"))?
             .into_temp_path();
         export::vacuum_into(
-            &self.connection,
+            self.connection.clone().lock_owned().await,
             temp_path
                 .to_str()
                 .expect("named temp files generate unicode names"),
