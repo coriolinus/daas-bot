@@ -57,6 +57,21 @@ macro_rules! or_break {
     };
 }
 
+/// Dispatch an error on the specified channel and break if the expression results in one.
+macro_rules! dispatch_err {
+    ($e:expr => $tx:expr $(; $log:literal)?) => {{
+        match $e {
+            Ok(ok) => ok,
+            Err(e) => {
+                $(warn!($log);)?
+                // we don't care if the send fails in this case; we're breaking regardless
+                let _ = $tx.send(e).await;
+                break;
+            }
+        }
+    }};
+}
+
 /// Container type which holds fundamental data about the command which launched this export,
 /// a handle to the Http client, and the Sqlite connection.
 ///
@@ -183,7 +198,9 @@ async fn fetch_message_pages(
         const GET_MESSAGES_LIMIT: Option<u8> = Some(100);
 
         debug!("exporter: fetch_message_pages: fetching messages before msg id \"{before:?}\"");
-        match http
+
+        let messages = dispatch_err!(
+            http
             .get_messages(
                 channel_id,
                 before.map(MessagePagination::Before),
@@ -194,19 +211,16 @@ async fn fetch_message_pages(
             // https://docs.discord.com/developers/resources/message#get-channel-messages:
             // > Returns an array of message objects from newest to oldest
             .inspect(|messages| before = messages.last().map(|message| message.id))
-        {
-            Ok(messages) => {
-                if messages.is_empty() {
-                    // we've exhausted the messages in the channel
-                    debug!("exporter: fetch_message_pages: no messages received, ending task");
-                    break;
-                }
-                or_break!(msg_tx.send(messages).await; "exporter: fetch_message_pages: msg_tx send failed, aborting");
-            }
-            Err(err) => {
-                or_break!(err_tx.send(err).await; "exporter: fetch_message_pages: err_tx send failed, aborting");
-            }
+            => err_tx;
+            "exporter: fetch_message_pages: failed to fetch messages, aborting"
+        );
+
+        if messages.is_empty() {
+            // we've exhausted the messages in the channel
+            debug!("exporter: fetch_message_pages: no messages received, ending task");
+            break;
         }
+        or_break!(msg_tx.send(messages).await; "exporter: fetch_message_pages: msg_tx send failed, aborting");
     }
 
     debug!("exporter: fetch_message_pages: ending task");
@@ -253,19 +267,6 @@ async fn fetch_reaction_users(
 ) {
     debug!("exporter: fetch_reaction_users: starting task");
 
-    macro_rules! dispatch_err {
-        ($e:expr => $tx:expr) => {{
-            match $e {
-                Ok(ok) => ok,
-                Err(e) => {
-                    warn!("exporter: fetch_reaction_users: error \"{e}\", aborting");
-                    let _ = err_tx.send(e).await;
-                    return;
-                }
-            }
-        }};
-    }
-
     const REACTION_USERS_LIMIT: u8 = 100;
 
     'receive: while let Ok(reaction_request) = reaction_rx.recv().await {
@@ -284,7 +285,8 @@ async fn fetch_reaction_users(
                     REACTION_USERS_LIMIT,
                     after
                 ).await.map_err(Error::Http)
-                => &err_tx
+                => err_tx;
+                "exporter: fetch_reaction_users: failed to fetch reaction users, aborting"
             );
 
             if users.is_empty() {
