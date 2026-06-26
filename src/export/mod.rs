@@ -104,34 +104,39 @@ impl Exporter {
 
         debug!("exporter: drive: start");
 
-        let (message_pages_tx, message_pages_rx) = mpsc::channel(2); // provide backpressure
-        let (error_tx, mut error_rx) = mpsc::channel(1);
-        let (item_tx, mut item_rx) = mpsc::channel(HIGH_BUFFER_SIZE);
-        let (reaction_tx, reaction_rx) = async_channel::bounded(HIGH_BUFFER_SIZE);
-        let (votes_tx, votes_rx) = mpsc::channel(HIGH_BUFFER_SIZE);
-        let (persisted_items_tx, persisted_items_rx) = mpsc::channel(2);
-        let (persistable_votes_tx, mut persistable_votes_rx) = mpsc::channel(HIGH_BUFFER_SIZE);
+        // this scope ensures we don't accidentally keep around any channel ends whose closing is important to the system's signaling
+        let (mut error_rx, mut item_rx, mut persistable_votes_rx, mut persisted_items_tx) = {
+            let (message_pages_tx, message_pages_rx) = mpsc::channel(2); // provide backpressure
+            let (error_tx, error_rx) = mpsc::channel(1);
+            let (item_tx, item_rx) = mpsc::channel(HIGH_BUFFER_SIZE);
+            let (reaction_tx, reaction_rx) = async_channel::bounded(HIGH_BUFFER_SIZE);
+            let (votes_tx, votes_rx) = mpsc::channel(HIGH_BUFFER_SIZE);
+            let (persisted_items_tx, persisted_items_rx) = mpsc::channel(2);
+            let (persistable_votes_tx, persistable_votes_rx) = mpsc::channel(HIGH_BUFFER_SIZE);
 
-        spawn(fetch_message_pages(
-            self.http.clone(),
-            self.interaction.channel_id,
-            message_pages_tx,
-            error_tx.clone(),
-        ));
-        spawn(process_messages(message_pages_rx, item_tx, reaction_tx));
-        for _ in 0..REACTION_PROCESSING_TASKS {
-            spawn(fetch_reaction_users(
+            spawn(fetch_message_pages(
                 self.http.clone(),
-                reaction_rx.clone(),
-                votes_tx.clone(),
+                self.interaction.channel_id,
+                message_pages_tx,
                 error_tx.clone(),
             ));
-        }
-        spawn(hold_votes_for_relevant_item_persistence(
-            persisted_items_rx,
-            votes_rx,
-            persistable_votes_tx,
-        ));
+            spawn(process_messages(message_pages_rx, item_tx, reaction_tx));
+            for _ in 0..REACTION_PROCESSING_TASKS {
+                spawn(fetch_reaction_users(
+                    self.http.clone(),
+                    reaction_rx.clone(),
+                    votes_tx.clone(),
+                    error_tx.clone(),
+                ));
+            }
+            spawn(hold_votes_for_relevant_item_persistence(
+                persisted_items_rx,
+                votes_rx,
+                persistable_votes_tx,
+            ));
+
+            (error_rx, item_rx, persistable_votes_rx, persisted_items_tx)
+        };
 
         debug!("exporter: drive: beginning event loop");
 
@@ -140,7 +145,19 @@ impl Exporter {
                 Some(err) = error_rx.recv() => {
                     debug!("exporter: drive: rx error ({err}), aborting");
                     return Err(err)},
-                Some(item) = item_rx.recv() =>  {
+                maybe_item = item_rx.recv(), if !persisted_items_tx.is_closed() => {
+                    let Some(item) = maybe_item else {
+                        // When the incoming items channel finishes, we need to close the outbound
+                        // persisted_items channel so that `hold_votes_for_relevant_item_persistence`
+                        // can correctly judge when to shut itself down.
+                        // Challenge: we don't have a `.close` method on the transmitter.
+                        // Solution: replace it with a dummy one whose receiver immediately drops.
+                        // Note that we don't keep the rx side of things, so the new receiver immediately
+                        // drops, so the guard on this select branch should prevent a fast loop.
+                        let (dummy_tx, _dummy_rx) = mpsc::channel(0);
+                        persisted_items_tx = dummy_tx;
+                        continue;
+                    };
                     debug!("exporter: drive: rx item, persisting");
                     let message_id = item.message_id;
                     export::add_item(self.connection.clone().lock_owned().await, item).await?;
