@@ -1,7 +1,10 @@
 use std::{fmt::Write as _, sync::Arc};
 
 use either::Either;
-use jiff::Timestamp;
+use jiff::{
+    Timestamp,
+    fmt::{friendly::SpanPrinter, rfc2822::DateTimePrinter},
+};
 use log::{debug, info, warn};
 use serenity::all::{
     CommandInteraction, CreateAttachment, CreateInteractionResponseFollowup,
@@ -69,7 +72,16 @@ async fn gather_export_and_update_response(interaction: CommandInteraction, http
 
         let duration = Timestamp::now() - now;
 
-        let content = format!("Exported {channel_name} at {now} in {duration}");
+        let content = format!(
+            "Exported #{channel_name} at {} in {}",
+            DateTimePrinter::new()
+                .timestamp_to_rfc9110_string(&now)
+                .unwrap_or_else(|_| now.to_string()),
+            SpanPrinter::new()
+                .hours_minutes_seconds(true)
+                .precision(3.into())
+                .span_to_string(&duration),
+        );
         info!("successfully completed export job");
 
         Ok((
@@ -98,7 +110,7 @@ async fn gather_export_and_update_response(interaction: CommandInteraction, http
     let files = data
         .map(|data| {
             CreateAttachment::bytes(data, "export.sqlite").description(format!(
-                "The items and votes tabulated in {channel_name}, as calculated at {now} by Daas Bot"
+                "The items and votes tabulated in #{channel_name}, as calculated at {now} by Daas Bot"
             ))
         })
         .into_iter()
