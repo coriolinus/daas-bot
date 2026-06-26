@@ -154,7 +154,7 @@ impl Exporter {
                         // Solution: replace it with a dummy one whose receiver immediately drops.
                         // Note that we don't keep the rx side of things, so the new receiver immediately
                         // drops, so the guard on this select branch should prevent a fast loop.
-                        let (dummy_tx, _dummy_rx) = mpsc::channel(0);
+                        let (dummy_tx, _dummy_rx) = mpsc::channel(1); // mpsc bounded channel requires buffer > 0
                         persisted_items_tx = dummy_tx;
                         continue;
                     };
