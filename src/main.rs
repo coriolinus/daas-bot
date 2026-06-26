@@ -11,7 +11,7 @@ use serenity::all::Http;
 
 use cli::Args;
 use register::register;
-use simplelog::TermLogger;
+use simplelog::{ConfigBuilder, TermLogger};
 
 #[actix_web::main]
 async fn main() -> Result<()> {
@@ -20,7 +20,9 @@ async fn main() -> Result<()> {
     if args.log_level != LevelFilter::Off {
         TermLogger::init(
             args.log_level,
-            Default::default(),
+            ConfigBuilder::default()
+                .add_filter_ignore_str("serenity::http")
+                .build(),
             Default::default(),
             Default::default(),
         )
