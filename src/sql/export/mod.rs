@@ -66,9 +66,10 @@ fn ensure_user(connection: &Connection, user_id: UserId, display_name: &str) -> 
 ///
 /// Returns the tag's primary key.
 fn ensure_tag(connection: &Connection, tag: &str) -> Result<Pk> {
+    // note the on conflict thing; we do need to touch the row to return the id
     let query = "INSERT INTO tags (description)
             VALUES (:description)
-            ON CONFLICT DO NOTHING
+            ON CONFLICT (description) DO UPDATE SET description = excluded.description
             RETURNING id";
 
     let mut stmt = connection
@@ -156,9 +157,10 @@ pub async fn add_item(
 ///
 /// Returns the category's primary key.
 fn ensure_category(connection: &Connection, category: &str) -> Result<Pk> {
+    // note the on conflict thing; we do need to touch the row to return the id
     let query = "INSERT INTO categories (emoji)
             VALUES (:category)
-            ON CONFLICT DO NOTHING
+            ON CONFLICT (emoji) DO UPDATE SET emoji = excluded.emoji
             RETURNING id";
 
     let mut stmt = connection
